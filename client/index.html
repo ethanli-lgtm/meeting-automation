@@ -128,6 +128,62 @@
     display: inline-block; font-size: 11px; padding: 2px 8px;
     background: #EFF6FF; color: var(--primary); border-radius: 999px;
   }
+  /* Hint text 永遠看得見的小說明 */
+  .hint {
+    font-size: 12px; color: var(--text); background: #F1F5F9;
+    border-left: 3px solid var(--primary); padding: 8px 12px;
+    border-radius: 4px; margin-bottom: 8px;
+  }
+  /* 工具列 */
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; gap: 8px;
+  }
+  .toolbar .left { display: flex; gap: 8px; align-items: center; }
+  .toolbar button.tiny {
+    padding: 4px 10px; font-size: 12px; background: #fff;
+    color: var(--text); border: 1px solid var(--border);
+  }
+  .count-chip {
+    font-size: 12px; font-weight: 600; padding: 4px 10px;
+    border-radius: 999px; background: var(--primary-light, #EFF6FF); color: var(--primary);
+  }
+  .count-chip.zero { background: #F1F5F9; color: var(--muted); font-weight: 400; }
+  /* HubSpot 同步面板 */
+  .hubspot-panel {
+    margin-top: 16px; padding: 16px; border-radius: 10px;
+    background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
+    border: 1px solid #FED7AA;
+  }
+  .hubspot-panel h3 {
+    margin: 0 0 12px; font-size: 14px; color: #9A3412;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .hubspot-panel h3::before {
+    content: '🔗'; font-size: 16px;
+  }
+  .hubspot-panel .step {
+    display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px;
+  }
+  .hubspot-panel .step-num {
+    flex: 0 0 22px; height: 22px; border-radius: 50%;
+    background: #EA580C; color: #fff; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 6px;
+  }
+  .hubspot-panel .step-body { flex: 1; }
+  .hubspot-panel .step-label {
+    font-size: 12px; color: #9A3412; margin-bottom: 4px; font-weight: 500;
+  }
+  .hubspot-panel button.sync-btn {
+    background: #EA580C; color: #fff; padding: 10px 20px;
+    font-size: 14px; font-weight: 600; width: 100%;
+  }
+  .hubspot-panel button.sync-btn:hover:not(:disabled) { background: #C2410C; }
+  .hubspot-panel button.sync-btn:disabled { background: #FDBA74; }
+  .hubspot-panel .selected-deal {
+    font-size: 12px; color: #9A3412; margin-top: 6px;
+  }
 </style>
 </head>
 <body>
@@ -140,6 +196,9 @@
   <!-- 左：會議選擇 -->
   <section class="card">
     <h2>1. 選擇會議</h2>
+    <div class="hint">
+      可勾選 <b>多場會議</b>。報告書/簡報會合併所有勾選的會議內容；需求蒐集/交接文件建議用同一個 Deal 對應的會議。
+    </div>
     <div class="row">
       <div>
         <label>從</label>
@@ -157,7 +216,15 @@
     <div class="row">
       <button id="btn-load" onclick="loadMeetings()">查詢會議</button>
     </div>
-    <div id="selected-count" class="selected-count" style="display:none"></div>
+    <div class="toolbar">
+      <div class="left">
+        <span id="selected-count" class="count-chip zero">尚未選擇會議</span>
+      </div>
+      <div>
+        <button class="tiny" onclick="selectAll(true)">全選</button>
+        <button class="tiny" onclick="selectAll(false)">清空</button>
+      </div>
+    </div>
     <div id="meetings" class="meetings"></div>
   </section>
 
@@ -187,15 +254,36 @@
     <div id="result-text-area" style="display:none">
       <textarea id="result-text"></textarea>
       <div class="actions" style="margin-top:12px">
-        <button onclick="copyText()">複製</button>
-        <div class="combo" style="flex:2">
-          <input id="dealSearch" placeholder="搜尋 HubSpot Deal（輸入名稱）"
-                 oninput="searchDeals(this.value)" onfocus="searchDeals(this.value)" autocomplete="off"/>
-          <div id="dealOptions" class="options" style="display:none"></div>
-        </div>
-        <button id="btn-sync" onclick="syncHubSpot()">同步到 HubSpot</button>
+        <button onclick="copyText()">📋 複製文字</button>
       </div>
-      <p id="dealHint" class="dim" style="margin:8px 0 0">尚未選擇 Deal</p>
+
+      <!-- HubSpot 同步面板 -->
+      <div class="hubspot-panel">
+        <h3>同步到 HubSpot Deal Notes</h3>
+
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-label">搜尋並選擇 Deal</div>
+            <div class="combo">
+              <input id="dealSearch" placeholder="輸入 Deal 名稱關鍵字"
+                     oninput="searchDeals(this.value)" onfocus="searchDeals(this.value)" autocomplete="off"/>
+              <div id="dealOptions" class="options" style="display:none"></div>
+            </div>
+            <div id="dealHint" class="selected-deal">尚未選擇 Deal</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-label">把上方文字寫進該 Deal 的 Notes</div>
+            <button id="btn-sync" class="sync-btn" onclick="syncHubSpot()" disabled>
+              同步到 HubSpot
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 報告書 -->
@@ -259,11 +347,21 @@ function setLoading(btnId, loading, label) {
 function updateSelectedCount() {
   const el = document.getElementById('selected-count');
   if (selected.size === 0) {
-    el.style.display = 'none';
+    el.classList.add('zero');
+    el.textContent = '尚未選擇會議';
   } else {
-    el.style.display = 'block';
+    el.classList.remove('zero');
     el.textContent = `已選 ${selected.size} 場會議`;
   }
+}
+
+function selectAll(on) {
+  document.querySelectorAll('#meetings .meeting input[type=checkbox]').forEach((cb) => {
+    if (cb.checked !== on) {
+      cb.checked = on;
+      cb.dispatchEvent(new Event('change'));
+    }
+  });
 }
 
 async function loadMeetings() {
@@ -425,7 +523,8 @@ function pickDeal(d) {
   document.getElementById('dealSearch').value = d.name || d.id;
   document.getElementById('dealOptions').style.display = 'none';
   document.getElementById('dealHint').innerHTML =
-    `已選：<span class="pill">${escapeHtml(d.name || d.id)}</span> <span class="dim">ID: ${d.id}</span>`;
+    `✅ 已鎖定：<b>${escapeHtml(d.name || d.id)}</b> · ID ${d.id}`;
+  document.getElementById('btn-sync').disabled = false;
 }
 
 document.addEventListener('click', (e) => {
