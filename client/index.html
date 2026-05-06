@@ -301,6 +301,7 @@
       <textarea id="result-text"></textarea>
       <div class="actions" style="margin-top:12px">
         <button onclick="copyText()">📋 複製文字</button>
+        <button onclick="downloadText()" class="ghost">⬇ 下載 .txt</button>
       </div>
 
       <!-- HubSpot 同步面板 -->
@@ -487,8 +488,8 @@ async function generate(type) {
     const res = await fetch('/api/generate', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || res.statusText);
-    lastResult = data;
-    showResult(data);
+    lastResult = { ...data, subtype: type };
+    showResult(lastResult);
     toast('生成完成', 'success');
   } catch (e) {
     toast('生成失敗：' + e.message, 'error');
@@ -588,6 +589,23 @@ function showResult(data) {
 function copyText() {
   navigator.clipboard.writeText(document.getElementById('result-text').value);
   toast('已複製到剪貼簿', 'success');
+}
+
+function downloadText() {
+  const text = document.getElementById('result-text').value;
+  if (!text.trim()) return toast('沒有內容可下載', 'error');
+  const company = lastResult?.companyName || '客戶';
+  const label = lastResult?.subtype === 'handover' ? '交接文件' : '需求蒐集';
+  const filename = `${company}_${label}.txt`;
+  // 加 BOM 確保 Excel / 舊 Notepad 開繁中不亂碼
+  const blob = new Blob(['﻿', text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`已下載 ${filename}`, 'success');
 }
 
 // === HubSpot Deal 搜尋下拉 ===
