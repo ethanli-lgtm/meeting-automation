@@ -58,6 +58,8 @@
   button.ghost { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
   button.mint { background: var(--mint); }
   button.purple { background: var(--purple); }
+  button.amber { background: #F59E0B; }
+  button.amber:hover:not(:disabled) { background: #D97706; }
   button:disabled { opacity: .5; cursor: not-allowed; }
   .meetings {
     max-height: 360px; overflow-y: auto;
@@ -239,9 +241,9 @@
     </div>
     <div class="actions" style="margin-top: 12px;">
       <button id="btn-requirement" onclick="generate('requirement')">需求蒐集</button>
-      <button id="btn-handover" onclick="generate('handover')" class="ghost">交接文件</button>
-      <button id="btn-report" onclick="generate('report')" class="ghost">規劃報告書</button>
+      <button id="btn-report" onclick="generate('report')" class="purple">規劃報告書</button>
       <button id="btn-slides" onclick="generate('slides')" class="mint">客戶簡報</button>
+      <button id="btn-handover" onclick="generate('handover')" class="amber">交接文件</button>
     </div>
     <p class="dim" style="margin:0">
       建議：需求蒐集和交接文件用單一 deal 對應的會議；報告書和簡報可合併多場。
