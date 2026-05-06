@@ -1,0 +1,44 @@
+# Render Blueprint：一鍵部署到 Render
+# 詳見 https://render.com/docs/blueprint-spec
+#
+# 使用方式：
+#   1. 把此 repo 連到 Render（Dashboard → New → Blueprint）
+#   2. Render 讀到本檔會自動建立服務
+#   3. 在 Environment 分頁填入下列 sync:false 的環境變數值
+#   4. 部署後到 Google Cloud Console 把 Render 的 onrender.com URL
+#      補進 OAuth Authorized redirect URIs
+
+services:
+  - type: web
+    name: meeting-automation
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: main
+    buildCommand: npm install
+    startCommand: node server/index.js
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 3000
+      - key: COMPANY_DOMAIN
+        value: cresclab.com
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        value: 1ncfnP1ZTZjEyvGKHCLlaFDylooZ0TG-A
+      # === 機密：Render Dashboard → Environment 手動填 ===
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FIREFLIES_API_KEY
+        sync: false
+      - key: HUBSPOT_TOKEN
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        # 部署後在 Render Dashboard 改成 https://<service-name>.onrender.com/oauth/callback
+        sync: false

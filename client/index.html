@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>會議需求自動化 · Crescendo Lab</title>
+<style>
+  :root {
+    --primary: #5090FF;
+    --primary-dark: #3A6FD5;
+    --purple: #801FF9;
+    --mint: #47D7AC;
+    --title: #334155;
+    --text: #4B5563;
+    --muted: #94A3B8;
+    --bg: #F8FAFC;
+    --card: #fff;
+    --border: #E5E7EB;
+    --danger: #EF4444;
+    --success: #10B981;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--text); margin: 0;
+  }
+  header {
+    background: linear-gradient(135deg, var(--primary), var(--purple));
+    color: #fff; padding: 28px 40px;
+  }
+  header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+  header p { margin: 6px 0 0; font-size: 13px; opacity: .9; }
+  main {
+    max-width: 1200px; margin: 24px auto; padding: 0 24px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--title); }
+  label { font-size: 12px; color: var(--text); display: block; margin-bottom: 4px; }
+  input, select, textarea, button {
+    font-family: inherit; font-size: 14px; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff;
+  }
+  input, select, textarea { width: 100%; }
+  textarea {
+    min-height: 320px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 13px;
+  }
+  .row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .row > * { flex: 1; }
+  button {
+    cursor: pointer; background: var(--primary); color: #fff; border: 0; font-weight: 500;
+    transition: filter .15s, opacity .15s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  button.ghost { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+  button.mint { background: var(--mint); }
+  button.purple { background: var(--purple); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .meetings {
+    max-height: 360px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .meetings:empty::before {
+    content: '尚未查詢，或這個區間沒有會議';
+    display: block; padding: 24px; text-align: center; color: var(--muted); font-size: 13px;
+  }
+  .meeting {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: center; cursor: pointer;
+  }
+  .meeting:last-child { border-bottom: 0; }
+  .meeting:hover { background: var(--bg); }
+  .meeting.selected { background: #EFF6FF; }
+  .meeting input { width: auto; margin: 0; }
+  .meeting-title { flex: 1; font-size: 13px; color: var(--title); font-weight: 500; }
+  .meeting-meta { font-size: 11px; color: var(--muted); display: flex; gap: 8px; }
+  .selected-count {
+    font-size: 12px; color: var(--primary); font-weight: 500; margin-bottom: 8px;
+  }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .actions button { flex: 1; min-width: 140px; }
+  .full { grid-column: 1 / -1; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--title); color: #fff; padding: 10px 16px;
+    border-radius: 6px; font-size: 13px; max-width: 360px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--success); }
+  pre.json {
+    background: #0F172A; color: #94E0FF; padding: 16px;
+    border-radius: 6px; max-height: 360px; overflow: auto; font-size: 12px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  /* Combobox for HubSpot deals */
+  .combo { position: relative; }
+  .combo .options {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+    background: #fff; border: 1px solid var(--border); border-top: 0;
+    border-radius: 0 0 6px 6px; max-height: 240px; overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+  }
+  .combo .option {
+    padding: 8px 12px; cursor: pointer; font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .combo .option:last-child { border-bottom: 0; }
+  .combo .option:hover, .combo .option.active { background: #EFF6FF; }
+  .combo .option .name { color: var(--title); font-weight: 500; }
+  .combo .option .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  /* Spinner */
+  .spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+    border-radius: 50%; animation: spin .8s linear infinite;
+    margin-right: 6px; vertical-align: -2px;
+  }
+  button.ghost .spinner { border-top-color: var(--primary); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dim { color: var(--muted); font-size: 12px; }
+  .link { color: var(--primary); text-decoration: none; }
+  .link:hover { text-decoration: underline; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 2px 8px;
+    background: #EFF6FF; color: var(--primary); border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>會議需求自動化</h1>
+  <p>從 Fireflies 抓會議 → Claude 整理 → 同步 HubSpot / 產出 Word / 建立 Google Slides</p>
+</header>
+
+<main>
+  <!-- 左：會議選擇 -->
+  <section class="card">
+    <h2>1. 選擇會議</h2>
+    <div class="row">
+      <div>
+        <label>從</label>
+        <input type="date" id="from" />
+      </div>
+      <div>
+        <label>到</label>
+        <input type="date" id="to" />
+      </div>
+      <div>
+        <label>關鍵字（客戶名）</label>
+        <input id="keyword" placeholder="例：好想吃" />
+      </div>
+    </div>
+    <div class="row">
+      <button id="btn-load" onclick="loadMeetings()">查詢會議</button>
+    </div>
+    <div id="selected-count" class="selected-count" style="display:none"></div>
+    <div id="meetings" class="meetings"></div>
+  </section>
+
+  <!-- 右：操作 -->
+  <section class="card">
+    <h2>2. 產出文件</h2>
+    <div>
+      <label>客戶公司名（影響標題與檔名）</label>
+      <input id="companyName" placeholder="例：好想吃股份有限公司" />
+    </div>
+    <div class="actions" style="margin-top: 12px;">
+      <button id="btn-requirement" onclick="generate('requirement')">需求蒐集</button>
+      <button id="btn-handover" onclick="generate('handover')" class="ghost">交接文件</button>
+      <button id="btn-report" onclick="generate('report')" class="ghost">規劃報告書</button>
+      <button id="btn-slides" onclick="generate('slides')" class="mint">客戶簡報</button>
+    </div>
+    <p class="dim" style="margin:0">
+      建議：需求蒐集和交接文件用單一 deal 對應的會議；報告書和簡報可合併多場。
+    </p>
+  </section>
+
+  <!-- 下：結果 -->
+  <section class="card full" id="result-card" style="display:none">
+    <h2 id="result-title">結果</h2>
+
+    <!-- 文字結果 (requirement / handover) -->
+    <div id="result-text-area" style="display:none">
+      <textarea id="result-text"></textarea>
+      <div class="actions" style="margin-top:12px">
+        <button onclick="copyText()">複製</button>
+        <div class="combo" style="flex:2">
+          <input id="dealSearch" placeholder="搜尋 HubSpot Deal（輸入名稱）"
+                 oninput="searchDeals(this.value)" onfocus="searchDeals(this.value)" autocomplete="off"/>
+          <div id="dealOptions" class="options" style="display:none"></div>
+        </div>
+        <button id="btn-sync" onclick="syncHubSpot()">同步到 HubSpot</button>
+      </div>
+      <p id="dealHint" class="dim" style="margin:8px 0 0">尚未選擇 Deal</p>
+    </div>
+
+    <!-- 報告書 -->
+    <div id="result-report-area" style="display:none">
+      <p class="dim">下方為 Claude 產出的結構化內容預覽，會直接渲染進 Word：</p>
+      <pre class="json" id="result-json"></pre>
+      <div class="actions" style="margin-top:12px">
+        <button id="btn-docx" onclick="downloadDocx()">下載 Word</button>
+      </div>
+    </div>
+
+    <!-- 簡報 -->
+    <div id="result-slides-area" style="display:none">
+      <p class="dim">下方為 Claude 產出的簡報大綱，將透過 pptxgenjs 渲染並上傳 Drive 轉成 Google Slides：</p>
+      <pre class="json" id="result-slides-json"></pre>
+      <div class="actions" style="margin-top:12px">
+        <button id="btn-slides-create" onclick="createSlides()">建立 Google Slides</button>
+        <span id="slides-link" class="dim"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+const SESSION_ID = (() => {
+  let id = localStorage.getItem('sid');
+  if (!id) { id = Math.random().toString(36).slice(2); localStorage.setItem('sid', id); }
+  return id;
+})();
+
+let lastResult = null;
+let selected = new Set();
+let selectedMeta = new Map(); // id → {title, date}
+let selectedDeal = null; // {id, name}
+let dealSearchTimer = null;
+
+function toast(msg, level = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (level === 'error' ? ' error' : level === 'success' ? ' success' : '');
+  t.style.display = 'block';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.style.display = 'none', 3500);
+}
+
+function setLoading(btnId, loading, label) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (loading) {
+    btn.dataset.original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span>${label || '處理中…'}`;
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.original) btn.innerHTML = btn.dataset.original;
+  }
+}
+
+function updateSelectedCount() {
+  const el = document.getElementById('selected-count');
+  if (selected.size === 0) {
+    el.style.display = 'none';
+  } else {
+    el.style.display = 'block';
+    el.textContent = `已選 ${selected.size} 場會議`;
+  }
+}
+
+async function loadMeetings() {
+  setLoading('btn-load', true, '查詢中…');
+  try {
+    const from = document.getElementById('from').value;
+    const to = document.getElementById('to').value;
+    const keyword = document.getElementById('keyword').value;
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (keyword) params.set('keyword', keyword);
+    const res = await fetch('/api/meetings?' + params);
+    if (!res.ok) throw new Error(await res.text());
+    const list = await res.json();
+    const el = document.getElementById('meetings');
+    el.innerHTML = '';
+    if (!Array.isArray(list) || list.length === 0) {
+      el.innerHTML = '';
+      toast('查無會議，試試放寬日期或關鍵字', 'info');
+      return;
+    }
+    list.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'meeting';
+      const dateStr = m.date ? new Date(m.date).toLocaleDateString('zh-TW') : '';
+      const dur = m.duration ? `${Math.round(m.duration)} 分鐘` : '';
+      div.innerHTML = `
+        <input type="checkbox" data-id="${m.id}" />
+        <div style="flex:1">
+          <div class="meeting-title">${escapeHtml(m.title || '(無標題)')}</div>
+          <div class="meeting-meta"><span>${dateStr}</span>${dur ? `<span>·</span><span>${dur}</span>` : ''}</div>
+        </div>
+      `;
+      const checkbox = div.querySelector('input');
+      const toggle = (checked) => {
+        if (checked) {
+          selected.add(m.id);
+          selectedMeta.set(m.id, { title: m.title, date: m.date });
+          div.classList.add('selected');
+        } else {
+          selected.delete(m.id);
+          selectedMeta.delete(m.id);
+          div.classList.remove('selected');
+        }
+        updateSelectedCount();
+      };
+      checkbox.onchange = (e) => toggle(e.target.checked);
+      div.onclick = (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        checkbox.checked = !checkbox.checked;
+        toggle(checkbox.checked);
+      };
+      el.appendChild(div);
+    });
+  } catch (e) {
+    toast('查詢失敗：' + e.message, 'error');
+  } finally {
+    setLoading('btn-load', false);
+  }
+}
+
+async function generate(type) {
+  if (selected.size === 0) return toast('請先選擇會議', 'error');
+  const btnId = `btn-${type}`;
+  setLoading(btnId, true, 'Claude 思考中…');
+  toast('Claude 思考中，可能需要 20-40 秒');
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meetingIds: [...selected],
+        type,
+        companyName: document.getElementById('companyName').value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || res.statusText);
+    lastResult = data;
+    showResult(data);
+    toast('生成完成', 'success');
+  } catch (e) {
+    toast('生成失敗：' + e.message, 'error');
+  } finally {
+    setLoading(btnId, false);
+  }
+}
+
+function showResult(data) {
+  document.getElementById('result-card').style.display = 'block';
+  const text = document.getElementById('result-text-area');
+  const rep = document.getElementById('result-report-area');
+  const sli = document.getElementById('result-slides-area');
+  text.style.display = rep.style.display = sli.style.display = 'none';
+  document.getElementById('slides-link').innerHTML = '';
+
+  if (data.kind === 'text') {
+    document.getElementById('result-title').textContent =
+      lastResult?.companyName ? `${lastResult.companyName} · 文字結果` : '文字結果';
+    text.style.display = 'block';
+    document.getElementById('result-text').value = data.content;
+  } else if (data.kind === 'report') {
+    document.getElementById('result-title').textContent =
+      `${data.companyName} · 規劃報告書`;
+    rep.style.display = 'block';
+    document.getElementById('result-json').textContent = JSON.stringify(data.data, null, 2);
+  } else if (data.kind === 'slides') {
+    document.getElementById('result-title').textContent =
+      `${data.companyName} · 客戶簡報大綱`;
+    sli.style.display = 'block';
+    document.getElementById('result-slides-json').textContent = JSON.stringify(data.data, null, 2);
+  }
+  document.getElementById('result-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function copyText() {
+  navigator.clipboard.writeText(document.getElementById('result-text').value);
+  toast('已複製到剪貼簿', 'success');
+}
+
+// === HubSpot Deal 搜尋下拉 ===
+async function searchDeals(q) {
+  clearTimeout(dealSearchTimer);
+  dealSearchTimer = setTimeout(async () => {
+    const opts = document.getElementById('dealOptions');
+    if (!q || q.trim().length < 1) {
+      opts.style.display = 'none';
+      return;
+    }
+    try {
+      const res = await fetch('/api/hubspot/deals?q=' + encodeURIComponent(q));
+      if (!res.ok) throw new Error(await res.text());
+      const list = await res.json();
+      opts.innerHTML = '';
+      if (!list.length) {
+        opts.innerHTML = '<div class="option dim">查無相符的 Deal</div>';
+      } else {
+        list.forEach(d => {
+          const div = document.createElement('div');
+          div.className = 'option';
+          div.innerHTML = `
+            <div class="name">${escapeHtml(d.name || '(無名稱)')}</div>
+            <div class="meta">ID: ${d.id}${d.amount ? ` · 金額 ${d.amount}` : ''}${d.stage ? ` · ${d.stage}` : ''}</div>
+          `;
+          div.onclick = () => pickDeal(d);
+          opts.appendChild(div);
+        });
+      }
+      opts.style.display = 'block';
+    } catch (e) {
+      opts.innerHTML = `<div class="option dim">搜尋失敗：${escapeHtml(e.message)}</div>`;
+      opts.style.display = 'block';
+    }
+  }, 250);
+}
+
+function pickDeal(d) {
+  selectedDeal = d;
+  document.getElementById('dealSearch').value = d.name || d.id;
+  document.getElementById('dealOptions').style.display = 'none';
+  document.getElementById('dealHint').innerHTML =
+    `已選：<span class="pill">${escapeHtml(d.name || d.id)}</span> <span class="dim">ID: ${d.id}</span>`;
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.combo')) {
+    document.getElementById('dealOptions').style.display = 'none';
+  }
+});
+
+async function syncHubSpot() {
+  if (!selectedDeal) return toast('請先選擇 HubSpot Deal', 'error');
+  setLoading('btn-sync', true, '同步中…');
+  try {
+    const res = await fetch('/api/hubspot/sync', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dealId: selectedDeal.id,
+        content: document.getElementById('result-text').value,
+        title: lastResult?.companyName + ' 需求/交接（自動生成）',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || res.statusText);
+    toast(`已同步到 HubSpot Deal「${selectedDeal.name}」`, 'success');
+  } catch (e) {
+    toast('同步失敗：' + e.message, 'error');
+  } finally {
+    setLoading('btn-sync', false);
+  }
+}
+
+async function downloadDocx() {
+  setLoading('btn-docx', true, '產生 Word…');
+  try {
+    const res = await fetch('/api/docx', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: lastResult.data, companyName: lastResult.companyName }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${lastResult.companyName}_規劃報告書.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Word 已下載', 'success');
+  } catch (e) {
+    toast('下載失敗：' + e.message, 'error');
+  } finally {
+    setLoading('btn-docx', false);
+  }
+}
+
+async function createSlides() {
+  setLoading('btn-slides-create', true, '建立 Slides…');
+  try {
+    let res = await fetch('/api/slides/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: lastResult.data, companyName: lastResult.companyName, sessionId: SESSION_ID,
+      }),
+    });
+    if (res.status === 401) {
+      toast('需要 Google 授權，請在彈出視窗完成');
+      const popup = window.open(`/oauth/start?sessionId=${SESSION_ID}`, '_blank', 'width=500,height=600');
+      await new Promise((r, rej) => {
+        const timer = setTimeout(() => rej(new Error('授權超時')), 120000);
+        window.addEventListener('message', (e) => {
+          if (e.data === 'oauth-done') { clearTimeout(timer); r(); }
+        }, { once: true });
+      });
+      res = await fetch('/api/slides/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: lastResult.data, companyName: lastResult.companyName, sessionId: SESSION_ID,
+        }),
+      });
+    }
+    const data = await res.json();
+    if (!res.ok || !data.link) throw new Error(data.error || res.statusText);
+    document.getElementById('slides-link').innerHTML =
+      `<a href="${data.link}" target="_blank" class="link">開啟 Google Slides ↗</a>`;
+    toast('簡報已建立', 'success');
+  } catch (e) {
+    toast('建立失敗：' + e.message, 'error');
+  } finally {
+    setLoading('btn-slides-create', false);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 預設帶最近 7 天
+(() => {
+  const now = new Date();
+  const past = new Date(now.getTime() - 7 * 86400 * 1000);
+  document.getElementById('to').value = now.toISOString().slice(0, 10);
+  document.getElementById('from').value = past.toISOString().slice(0, 10);
+})();
+</script>
+</body>
+</html>
