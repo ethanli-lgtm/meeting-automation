@@ -186,6 +186,30 @@
   .hubspot-panel .selected-deal {
     font-size: 12px; color: #9A3412; margin-top: 6px;
   }
+  /* 補充資訊區 */
+  .supplement textarea {
+    min-height: 100px; font-family: 'Noto Sans TC', system-ui, sans-serif; font-size: 13px;
+  }
+  .file-drop {
+    border: 2px dashed var(--border); border-radius: 8px;
+    padding: 16px; text-align: center; color: var(--muted); font-size: 13px;
+    cursor: pointer; transition: border-color .15s, background .15s;
+    margin-top: 8px;
+  }
+  .file-drop:hover, .file-drop.dragover { border-color: var(--primary); background: var(--primary-light, #EFF6FF); color: var(--primary); }
+  .file-drop input[type=file] { display: none; }
+  .file-list { margin-top: 8px; }
+  .file-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; background: var(--bg);
+    border-radius: 4px; font-size: 12px; margin-bottom: 4px;
+  }
+  .file-item .name { flex: 1; color: var(--title); }
+  .file-item .size { color: var(--muted); }
+  .file-item .remove {
+    background: none; border: 0; color: var(--danger);
+    font-size: 16px; cursor: pointer; padding: 0 4px;
+  }
 </style>
 </head>
 <body>
@@ -232,9 +256,27 @@
     <div id="meetings" class="meetings"></div>
   </section>
 
+  <!-- 右：補充資訊 -->
+  <section class="card supplement">
+    <h2>2. 補充資訊（選填）</h2>
+    <div class="hint">
+      會議沒提到、但 Claude 應該知道的內容寫在這裡。例如：之前 email 來往、客戶提供的需求文件、報價單。
+    </div>
+    <label>補充文字</label>
+    <textarea id="supplementText" placeholder="可以直接貼 email、會議前討論、其他補充資訊…"></textarea>
+
+    <label style="margin-top: 12px;">補充檔案（.txt / .md / .pdf / .docx，最多 6 檔、單檔 10MB）</label>
+    <label class="file-drop" id="fileDrop">
+      <span id="fileDropHint">點擊或拖曳檔案到這裡</span>
+      <input type="file" id="supplementFiles" multiple
+             accept=".txt,.md,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+    </label>
+    <div id="fileList" class="file-list"></div>
+  </section>
+
   <!-- 右：操作 -->
-  <section class="card">
-    <h2>2. 產出文件</h2>
+  <section class="card full">
+    <h2>3. 產出文件</h2>
     <div>
       <label>客戶公司名（影響標題與檔名）</label>
       <input id="companyName" placeholder="例：好想吃股份有限公司" />
@@ -325,6 +367,7 @@ let selected = new Set();
 let selectedMeta = new Map(); // id → {title, date}
 let selectedDeal = null; // {id, name}
 let dealSearchTimer = null;
+let supplementFiles = []; // File[]
 
 function toast(msg, level = 'info') {
   const t = document.getElementById('toast');
@@ -434,14 +477,14 @@ async function generate(type) {
   setLoading(btnId, true, 'Claude 思考中…');
   toast('Claude 思考中，可能需要 20-40 秒');
   try {
-    const res = await fetch('/api/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        meetingIds: [...selected],
-        type,
-        companyName: document.getElementById('companyName').value,
-      }),
-    });
+    const fd = new FormData();
+    fd.append('meetingIds', JSON.stringify([...selected]));
+    fd.append('type', type);
+    fd.append('companyName', document.getElementById('companyName').value || '');
+    fd.append('supplementText', document.getElementById('supplementText').value || '');
+    supplementFiles.forEach(f => fd.append('supplementFiles', f, f.name));
+
+    const res = await fetch('/api/generate', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || res.statusText);
     lastResult = data;
@@ -453,6 +496,67 @@ async function generate(type) {
     setLoading(btnId, false);
   }
 }
+
+// === 補充檔案 ===
+function bytesToReadable(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  el.innerHTML = '';
+  supplementFiles.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    div.innerHTML = `
+      <span class="name">${escapeHtml(f.name)}</span>
+      <span class="size">${bytesToReadable(f.size)}</span>
+      <button class="remove" title="移除">×</button>
+    `;
+    div.querySelector('.remove').onclick = () => {
+      supplementFiles.splice(i, 1);
+      renderFileList();
+    };
+    el.appendChild(div);
+  });
+  document.getElementById('fileDropHint').textContent =
+    supplementFiles.length === 0
+      ? '點擊或拖曳檔案到這裡'
+      : `已加入 ${supplementFiles.length} 個檔案，點擊或拖曳可繼續加`;
+}
+
+function addFiles(fileList) {
+  const incoming = Array.from(fileList || []);
+  const allowedExt = /\.(txt|md|pdf|docx)$/i;
+  const remain = 6 - supplementFiles.length;
+  if (remain <= 0) {
+    toast('最多 6 個檔案，請先移除', 'error');
+    return;
+  }
+  let skipped = 0;
+  incoming.slice(0, remain).forEach(f => {
+    if (!allowedExt.test(f.name)) { skipped++; return; }
+    if (f.size > 10 * 1024 * 1024) { skipped++; return; }
+    supplementFiles.push(f);
+  });
+  if (skipped) toast(`略過 ${skipped} 個不支援或過大的檔案`, 'error');
+  renderFileList();
+}
+
+(function bindFileDrop() {
+  const drop = document.getElementById('fileDrop');
+  const input = document.getElementById('supplementFiles');
+  input.onchange = (e) => { addFiles(e.target.files); input.value = ''; };
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('dragover'); };
+  drop.ondragleave = () => drop.classList.remove('dragover');
+  drop.ondrop = (e) => {
+    e.preventDefault();
+    drop.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  };
+})();
 
 function showResult(data) {
   document.getElementById('result-card').style.display = 'block';

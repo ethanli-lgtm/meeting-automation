@@ -1,6 +1,7 @@
 // server/index.js
 import 'dotenv/config';
 import express from 'express';
+import multer from 'multer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { google } from 'googleapis';
@@ -11,11 +12,18 @@ import * as prompts from './lib/prompts.js';
 import * as hubspot from './lib/hubspot.js';
 import * as slides from './lib/slides.js';
 import { generateReportDocx } from './lib/docx.js';
+import { extractMany } from './lib/extract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, '..', 'client')));
+
+// 上傳：記憶體模式，單檔最大 10MB、最多 6 檔
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 6 },
+});
 
 // ---- 簡易 in-memory token store（正式環境換 Redis / DB）----
 const tokenStore = new Map(); // sessionId → tokens
@@ -47,31 +55,46 @@ app.get('/api/meetings', async (req, res) => {
 });
 
 // ===========================================
-// 2) 生成 4 種文件
-//    body: { meetingIds: string[], type, companyName }
-//    type: 'requirement' | 'handover' | 'report' | 'slides'
+// 2) 生成 4 種文件（支援 multipart：可附補充文字 + 檔案）
+//    body: meetingIds (JSON 字串) | type | companyName | supplementText
+//    files: supplementFiles[] (.txt / .md / .pdf / .docx)
 // ===========================================
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', upload.array('supplementFiles', 6), async (req, res) => {
   try {
-    const { meetingIds, type, companyName } = req.body;
+    // 同時相容 JSON 與 multipart：multipart 時 meetingIds 會以字串送來
+    let { meetingIds, type, companyName, supplementText } = req.body;
+    if (typeof meetingIds === 'string') {
+      try { meetingIds = JSON.parse(meetingIds); } catch { meetingIds = meetingIds.split(','); }
+    }
     if (!meetingIds?.length) return res.status(400).json({ error: '請選擇至少一場會議' });
 
     const meetings = await fireflies.getTranscripts(meetingIds);
     const transcript = prompts.combineTranscripts(meetings);
     const company = companyName || meetings[0]?.title?.split(/[×x_-]/)[0]?.trim() || '客戶';
 
+    // 把補充文字 + 檔案抽出的文字接到 transcript 後面
+    const fileText = await extractMany(req.files || []);
+    const supplementBlocks = [];
+    if (supplementText?.trim()) {
+      supplementBlocks.push(`===== 業務補充說明 =====\n${supplementText.trim()}`);
+    }
+    if (fileText) supplementBlocks.push(fileText);
+    const fullContent = supplementBlocks.length
+      ? `${transcript}\n\n${supplementBlocks.join('\n\n')}`
+      : transcript;
+
     let result;
     if (type === 'requirement') {
-      const text = await claude.generateText(prompts.requirementPrompt({ companyName: company, transcript }));
+      const text = await claude.generateText(prompts.requirementPrompt({ companyName: company, transcript: fullContent }));
       result = { kind: 'text', content: text, companyName: company };
     } else if (type === 'handover') {
-      const text = await claude.generateText(prompts.handoverPrompt({ transcript }));
+      const text = await claude.generateText(prompts.handoverPrompt({ transcript: fullContent }));
       result = { kind: 'text', content: text, companyName: company };
     } else if (type === 'report') {
-      const data = await claude.generateJSON(prompts.reportPrompt({ companyName: company, transcript }));
+      const data = await claude.generateJSON(prompts.reportPrompt({ companyName: company, transcript: fullContent }));
       result = { kind: 'report', data, companyName: company };
     } else if (type === 'slides') {
-      const data = await claude.generateJSON(prompts.slidesPrompt({ companyName: company, transcript }));
+      const data = await claude.generateJSON(prompts.slidesPrompt({ companyName: company, transcript: fullContent }));
       result = { kind: 'slides', data, companyName: company };
     } else {
       return res.status(400).json({ error: 'unknown type' });
