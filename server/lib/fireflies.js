@@ -21,12 +21,17 @@ async function gql(query, variables = {}) {
 
 /**
  * 列出最近會議。可加日期過濾或關鍵字。
- * Fireflies API 的 `transcripts` query 支援 `fromDate`、`toDate`、`limit`、`title`
+ *
+ * 注意：Fireflies 的 `title` GraphQL 參數實測是 **exact match**（連完整字串都對不上），
+ * 對使用者沒幫助。這裡改成：用日期範圍從 Fireflies 拿一批回來，server 端再做
+ * case-insensitive 的 substring 比對。有 keyword 時自動把 limit 拉大避免漏抓。
  */
-export async function listMeetings({ fromDate, toDate, limit = 25, keyword }) {
+export async function listMeetings({ fromDate, toDate, limit = 50, keyword }) {
+  // Fireflies API 硬限制 limit ≤ 50
+  const fetchLimit = Math.min(limit, 50);
   const query = `
-    query Transcripts($fromDate: DateTime, $toDate: DateTime, $limit: Int, $title: String) {
-      transcripts(fromDate: $fromDate, toDate: $toDate, limit: $limit, title: $title) {
+    query Transcripts($fromDate: DateTime, $toDate: DateTime, $limit: Int) {
+      transcripts(fromDate: $fromDate, toDate: $toDate, limit: $limit) {
         id
         title
         date
@@ -36,13 +41,14 @@ export async function listMeetings({ fromDate, toDate, limit = 25, keyword }) {
       }
     }
   `;
-  const data = await gql(query, {
-    fromDate,
-    toDate,
-    limit,
-    title: keyword || undefined,
-  });
-  return data.transcripts;
+  const data = await gql(query, { fromDate, toDate, limit: fetchLimit });
+  let list = data.transcripts || [];
+
+  if (keyword?.trim()) {
+    const k = keyword.trim().toLowerCase();
+    list = list.filter((m) => (m.title || '').toLowerCase().includes(k));
+  }
+  return list.slice(0, limit);
 }
 
 /**
