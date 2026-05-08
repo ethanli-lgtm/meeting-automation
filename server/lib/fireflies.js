@@ -22,33 +22,56 @@ async function gql(query, variables = {}) {
 /**
  * 列出最近會議。可加日期過濾或關鍵字。
  *
- * 注意：Fireflies 的 `title` GraphQL 參數實測是 **exact match**（連完整字串都對不上），
- * 對使用者沒幫助。這裡改成：用日期範圍從 Fireflies 拿一批回來，server 端再做
- * case-insensitive 的 substring 比對。有 keyword 時自動把 limit 拉大避免漏抓。
+ * 注意：
+ * 1. Fireflies 的 `title` GraphQL 參數實測是 exact match，對使用者沒幫助 —
+ *    改成 server 端 case-insensitive substring 比對。
+ * 2. Fireflies API 硬限制 limit ≤ 50，且總是回最新的，所以高頻用戶
+ *    很容易讓「想找的會議」掉在 50 筆之外 —
+ *    用 `skip` 平行分頁掃 5 批（最多 250 筆）增加命中率。
  */
-export async function listMeetings({ fromDate, toDate, limit = 50, keyword }) {
-  // Fireflies API 硬限制 limit ≤ 50
-  const fetchLimit = Math.min(limit, 50);
-  const query = `
-    query Transcripts($fromDate: DateTime, $toDate: DateTime, $limit: Int) {
-      transcripts(fromDate: $fromDate, toDate: $toDate, limit: $limit) {
-        id
-        title
-        date
-        duration
-        meeting_attendees { displayName email }
-        organizer_email
-      }
+const QUERY = `
+  query Transcripts($fromDate: DateTime, $toDate: DateTime, $limit: Int, $skip: Int) {
+    transcripts(fromDate: $fromDate, toDate: $toDate, limit: $limit, skip: $skip) {
+      id
+      title
+      date
+      duration
+      meeting_attendees { displayName email }
+      organizer_email
     }
-  `;
-  const data = await gql(query, { fromDate, toDate, limit: fetchLimit });
-  let list = data.transcripts || [];
-
-  if (keyword?.trim()) {
-    const k = keyword.trim().toLowerCase();
-    list = list.filter((m) => (m.title || '').toLowerCase().includes(k));
   }
-  return list.slice(0, limit);
+`;
+
+const PAGE_SIZE = 50;
+const SCAN_PAGES_WITH_KEYWORD = 5; // 有 keyword 時掃 5×50 = 250 筆
+
+export async function listMeetings({ fromDate, toDate, limit = 50, keyword }) {
+  const k = keyword?.trim().toLowerCase();
+
+  if (!k) {
+    // 沒 keyword：拿最新一批就好
+    const data = await gql(QUERY, { fromDate, toDate, limit: Math.min(limit, PAGE_SIZE), skip: 0 });
+    return data.transcripts || [];
+  }
+
+  // 有 keyword：平行掃多頁（每頁 50），合併後 substring filter
+  const requests = [];
+  for (let i = 0; i < SCAN_PAGES_WITH_KEYWORD; i++) {
+    requests.push(
+      gql(QUERY, { fromDate, toDate, limit: PAGE_SIZE, skip: i * PAGE_SIZE })
+        .catch(() => ({ transcripts: [] })) // 單頁失敗不要拖累全部
+    );
+  }
+  const batches = await Promise.all(requests);
+  const all = batches.flatMap((d) => d.transcripts || []);
+  // 去重（萬一分頁邊界重疊）
+  const seen = new Set();
+  const matches = all.filter((m) => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return (m.title || '').toLowerCase().includes(k);
+  });
+  return matches.slice(0, limit);
 }
 
 /**
