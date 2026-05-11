@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { google } from 'googleapis';
 
 import * as fireflies from './lib/fireflies.js';
-import * as claude from './lib/claude.js';
+import * as ai from './lib/gemini.js';
 import * as prompts from './lib/prompts.js';
 import * as hubspot from './lib/hubspot.js';
 import * as slides from './lib/slides.js';
@@ -85,16 +85,16 @@ app.post('/api/generate', upload.array('supplementFiles', 6), async (req, res) =
 
     let result;
     if (type === 'requirement') {
-      const text = await claude.generateText(prompts.requirementPrompt({ companyName: company, transcript: fullContent }));
+      const text = await ai.generateText(prompts.requirementPrompt({ companyName: company, transcript: fullContent }));
       result = { kind: 'text', content: text, companyName: company };
     } else if (type === 'handover') {
-      const text = await claude.generateText(prompts.handoverPrompt({ transcript: fullContent }));
+      const text = await ai.generateText(prompts.handoverPrompt({ transcript: fullContent }));
       result = { kind: 'text', content: text, companyName: company };
     } else if (type === 'report') {
-      const data = await claude.generateJSON(prompts.reportPrompt({ companyName: company, transcript: fullContent }));
+      const data = await ai.generateJSON(prompts.reportPrompt({ companyName: company, transcript: fullContent }));
       result = { kind: 'report', data, companyName: company };
     } else if (type === 'slides') {
-      const data = await claude.generateJSON(prompts.slidesPrompt({ companyName: company, transcript: fullContent }));
+      const data = await ai.generateJSON(prompts.slidesPrompt({ companyName: company, transcript: fullContent }));
       result = { kind: 'slides', data, companyName: company };
     } else {
       return res.status(400).json({ error: 'unknown type' });

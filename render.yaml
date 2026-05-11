@@ -29,7 +29,7 @@ services:
       - key: GOOGLE_DRIVE_FOLDER_ID
         value: 1ncfnP1ZTZjEyvGKHCLlaFDylooZ0TG-A
       # === 機密：Render Dashboard → Environment 手動填 ===
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
       - key: FIREFLIES_API_KEY
         sync: false

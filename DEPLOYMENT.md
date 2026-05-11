@@ -6,7 +6,7 @@
 
 ## 前置:你需要的帳號
 
-- [ ] **Anthropic** 帳號(會用 Claude API,有充值)
+- [ ] **Google Gemini** API Key（從 https://aistudio.google.com/apikey 拿，AI Studio 有免費額度可先試）
 - [ ] **Fireflies** 帳號(已有,業務在用)
 - [ ] **HubSpot** 帳號 + 「Super Admin」或可建立 Private App 的權限
 - [ ] **Google Workspace** 帳號(`@cresclab.com`)
@@ -16,15 +16,17 @@
 
 ## Step 1 — 取得 4 把 API 金鑰
 
-### 1-A. Anthropic API Key
+### 1-A. Google Gemini API Key
 
-1. 前往 https://console.anthropic.com/
-2. 左側 **API Keys** → **Create Key**
-3. 命名為「meeting-automation」,Workspace 選預設
-4. 複製出現的 `sk-ant-api03-...` 字串(只會顯示一次,務必先存)
-5. 確認 **Plans & Billing** 有餘額,否則 API 會 401
+1. 前往 https://aistudio.google.com/apikey
+2. 點 **Create API key** → 選一個 GCP 專案（或讓它幫您建一個）
+3. 複製出現的 `AIzaSy...` 字串
+4. **AI Studio 有免費額度**（gemini-2.5-pro 每分鐘 5 個 request、每天 25 個），業務先試用免錢
+5. 要量產上線時到 Google Cloud Console 連上付費帳單即可
 
-> **預估成本**:每次跑完 4 種文件,約用 30K input tokens + 5K output tokens ≈ US$0.15-0.20。一個月跑 100 場會 ≈ US$15-20。
+> **預估成本**：gemini-2.5-pro 比 Claude 便宜約 40-50%。每次跑完 4 種文件 ≈ US$0.08-0.12。一個月跑 100 場會 ≈ US$8-12。
+>
+> **進階**：要走公司 GCP 帳單（不是個人 AI Studio），改用 Vertex AI，要修改 `server/lib/gemini.js` 用 `@google-cloud/vertexai`，並把 service account JSON 設成環境變數。
 
 ### 1-B. Fireflies API Key
 
@@ -88,7 +90,7 @@ cp .env.example .env
 用任何文字編輯器打開 `.env`,把 Step 1 拿到的金鑰填進去:
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-api03-你的key
+GEMINI_API_KEY=AIzaSy你的key
 FIREFLIES_API_KEY=你的key
 HUBSPOT_TOKEN=pat-na1-你的token
 GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
@@ -120,7 +122,7 @@ npm run dev
 3. 應該看到列表跑出最近的會議。**列不出來就是 Fireflies key 有問題**,先去檢查
 4. 勾選 1 場小型會議當作測試
 
-### 3-B. 測試 Claude 生成
+### 3-B. 測試 Gemini 生成
 
 1. 右側「客戶公司名」輸入該會議的客戶名(例如「測試公司」)
 2. 點 **需求蒐集**(最快、最簡單的測試)
@@ -136,7 +138,7 @@ npm run dev
 
 ### 3-D. 測試 Google Slides
 
-1. 點 **客戶簡報** 觸發 Claude 生成內容
+1. 點 **客戶簡報** 觸發 Gemini 生成內容
 2. 看到 JSON 後點 **建立 Google Slides**
 3. 第一次會跳出新視窗要求授權:
    - 用公司 Google 帳號登入
@@ -209,7 +211,7 @@ gh repo create crescendolab/meeting-automation --private --push
 
 ### Token 用量監控
 
-- Anthropic:https://console.anthropic.com/usage
+- Gemini：https://aistudio.google.com/usage 或 GCP Console → Vertex AI → Quotas
 - 設定預算警報避免被刷爆
 
 ### 常見問題排除
@@ -217,7 +219,7 @@ gh repo create crescendolab/meeting-automation --private --push
 | 症狀 | 原因 | 解法 |
 |------|------|------|
 | 列不出 Fireflies 會議 | API key 失效 / 方案不支援 | 重新生成 key |
-| Claude 回 401 | API key 錯 / 額度用盡 | 檢查 Anthropic console |
+| Gemini 回 400/403 | API key 錯 / 額度用盡 / 區域限制 | 檢查 AI Studio key、確認專案有啟用 Generative Language API |
 | HubSpot 同步失敗 | scope 沒勾全 / Deal ID 錯 | 檢查 Private App 的 scope |
 | Slides 授權後仍失敗 | Drive folder ID 錯 | 確認資料夾存在且帳號有寫入權 |
 | 字型在 Slides 顯示不對 | Google Slides 不支援嵌入字型 | 接受系統字型 fallback,或在 Slides 內手動換字 |

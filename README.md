@@ -10,7 +10,7 @@
 
 - 後端：Node.js 18+ / Express
 - 前端：Vanilla HTML + JS（可換 React）
-- AI：Anthropic Claude API（claude-sonnet-4-6）
+- AI：Google Gemini API（gemini-2.5-pro，可在 `.env` 改成 flash）
 - 資料源：Fireflies GraphQL API
 - 同步目的地：HubSpot Notes API、Google Drive/Slides
 
@@ -28,7 +28,7 @@ npm run dev
 ## .env 必填項
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=AIzaSy...
 FIREFLIES_API_KEY=...
 HUBSPOT_TOKEN=pat-na1-...
 
@@ -64,9 +64,12 @@ PORT=3000
 4. Authorized redirect URIs 填 `http://localhost:3000/oauth/callback`
 5. 下載 client ID 跟 secret
 
-### Anthropic
-1. https://console.anthropic.com/
-2. API Keys → Create Key
+### Google Gemini
+1. https://aistudio.google.com/apikey
+2. **Create API key** → 選一個 GCP 專案（或建新的）
+3. 複製出現的 `AIzaSy...` 字串
+4. 若公司要用 Vertex AI 走 GCP 計費，請 IT 給 Vertex AI 的 service account JSON
+   （此版本預設走 AI Studio key，要切換要改 `server/lib/gemini.js` 改用 @google-cloud/vertexai）
 
 ## 流程
 
